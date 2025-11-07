@@ -1,0 +1,114 @@
+name: "Maven Github Actions App Deployment Workflow "
+
+on:
+  push:
+    branches:
+      - main
+
+# Show commit message and branch name in run name
+run-name: "Commit: ${{ github.event.head_commit.message }} | Environment: DEV | Triggered By: ${{ github.actor }}"
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    env:
+      JAVA_VERSION: '17'
+      ENVIRONMENT: 'DEV'
+    steps:
+    - name: "Checkout Repository ${{ github.repository }}"
+      uses: actions/checkout@v4
+
+    - name: "Cache Dependencies"
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+
+    - name: "Setup Java ${{ env.JAVA_VERSION }}"
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ env.JAVA_VERSION }}
+
+    - name: Setup Maven
+      uses: stCarolas/setup-maven@v5
+      with:
+        maven-version: 3.9.6
+
+    - name: "Build with Maven"
+      run: mvn -B package --file pom.xml -D"mule.env"="${{ secrets.dev_mule_env }}" -D"mule.key"="${{ secrets.dev_mule_key }}" -DskipTests
+
+    - name: "Upload Artifact" 
+      uses: actions/upload-artifact@v4
+      with:
+          name: "Artifacts"
+          path: target/*.jar
+          retention-days: 1
+
+  Publish-To-Exchange:
+    needs: Build
+    runs-on: ubuntu-latest
+    steps:
+    - name: "Checkout Repository ${{ github.repository }}"
+      uses: actions/checkout@v4
+
+    - name: "Cache Dependencies"
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+
+    - name: "Download the JAR File"
+      uses: actions/download-artifact@v4
+      with:
+        name: "Artifacts"
+
+    - name: Setup Maven
+      uses: stCarolas/setup-maven@v5
+      with:
+        maven-version: 3.9.6
+
+    - name: "Publish to Exchange"
+      env:
+        connectedAppId: ${{ secrets.connected_app_id }}
+        connectedAppSecret: ${{ secrets.connected_app_secret }}
+      run: mvn clean deploy --settings settings/settings.xml
+
+  Deploy-To-CloudHub:
+    needs: Publish-To-Exchange
+    runs-on: ubuntu-latest
+    env:
+      JAVA_VERSION: '17'
+      ENVIRONMENT: 'DEV'
+    steps:
+    - name: "Checkout Repository ${{ github.repository }}"
+      uses: actions/checkout@v4
+
+    - name: "Cache Dependencies"
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+
+    - name: "Download the JAR File"
+      uses: actions/download-artifact@v4
+      with:
+        name: "Artifacts"
+
+    - name: Setup Maven
+      uses: stCarolas/setup-maven@v5
+      with:
+        maven-version: 3.9.6
+
+    - name: "Deploy to DEV"
+      env:
+        connectedAppId: ${{ secrets.connected_app_id }}
+        connectedAppSecret: ${{ secrets.connected_app_secret }}
+        grantType: ${{ secrets.grant_type }}
+      run: mvn clean deploy -DskipTests -DmuleDeploy -DClientId="$connectedAppId" -DClientSecret="$connectedAppSecret" -DjavaVersion="${{ env.JAVA_VERSION }}" -DGrantType="$grantType" -Denvironment="DEV" -D"mule.env"="${{ secrets.dev_mule_env }}" -D"application.name"="ci-cd-demo-poc-geetika"
