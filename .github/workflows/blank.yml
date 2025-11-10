@@ -1,114 +1,153 @@
-name: "Maven Github Actions App Deployment Workflow "
+name: "Maven MuleSoft CloudHub 2.0 Deployment Workflow"
 
 on:
   push:
     branches:
       - main
 
-# Show commit message and branch name in run name
-run-name: "Commit: ${{ github.event.head_commit.message }} | Environment: DEV | Triggered By: ${{ github.actor }}"
+run-name: "Deploy Mule App | Commit: ${{ github.event.head_commit.message }} | Triggered by: ${{ github.actor }}"
 
 jobs:
-  Build:
+  Initialize:
+    runs-on: ubuntu-latest
+    outputs:
+      build-id: ${{ steps.generate-id.outputs.build_id }}
+    steps:
+      - name: "Set up Build Context"
+        id: generate-id
+        run: echo "build_id=build-${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      - name: "Display Workflow Info"
+        run: |
+          echo " Starting MuleSoft CloudHub 2.0 Deployment..."
+          echo "🔹 Triggered by: ${{ github.actor }}"
+          echo "🔹 Commit Message: ${{ github.event.head_commit.message }}"
+          echo "🔹 Environment: DEV"
+
+  Build-App:
+    needs: Initialize
     runs-on: ubuntu-latest
     env:
       JAVA_VERSION: '17'
+      MAVEN_VERSION: '3.9.6'
       ENVIRONMENT: 'DEV'
     steps:
-    - name: "Checkout Repository ${{ github.repository }}"
-      uses: actions/checkout@v4
+      - name: "Checkout Code"
+        uses: actions/checkout@v4
 
-    - name: "Cache Dependencies"
-      uses: actions/cache@v4
-      with:
-        path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-        restore-keys: |
-          ${{ runner.os }}-maven-
+      - name: "Set up Java"
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
 
-    - name: "Setup Java ${{ env.JAVA_VERSION }}"
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: ${{ env.JAVA_VERSION }}
+      - name: "Set up Maven"
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: ${{ env.MAVEN_VERSION }}
 
-    - name: Setup Maven
-      uses: stCarolas/setup-maven@v5
-      with:
-        maven-version: 3.9.6
+      - name: "Cache Maven Dependencies"
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            maven-
 
-    - name: "Build with Maven"
-      run: mvn -B package --file pom.xml -D"mule.env"="${{ secrets.dev_mule_env }}" -D"mule.key"="${{ secrets.dev_mule_key }}" -DskipTests
+      - name: "Build Mule Application"
+        run: mvn clean package -B --file pom.xml -DskipTests \
+              -D"mule.env"="${{ secrets.dev_mule_env }}" \
+              -D"mule.key"="${{ secrets.dev_mule_key }}"
 
-    - name: "Upload Artifact" 
-      uses: actions/upload-artifact@v4
-      with:
-          name: "Artifacts"
+      - name: "Upload Build Artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: mule-artifacts
           path: target/*.jar
-          retention-days: 1
+          retention-days: 2
 
   Publish-To-Exchange:
-    needs: Build
+    needs: Build-App
     runs-on: ubuntu-latest
+    env:
+      MAVEN_VERSION: '3.9.6'
     steps:
-    - name: "Checkout Repository ${{ github.repository }}"
-      uses: actions/checkout@v4
+      - name: "Checkout Repository"
+        uses: actions/checkout@v4
 
-    - name: "Cache Dependencies"
-      uses: actions/cache@v4
-      with:
-        path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-        restore-keys: |
-          ${{ runner.os }}-maven-
+      - name: "Restore Maven Cache"
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('**/pom.xml') }}
 
-    - name: "Download the JAR File"
-      uses: actions/download-artifact@v4
-      with:
-        name: "Artifacts"
+      - name: "Download Built Artifacts"
+        uses: actions/download-artifact@v4
+        with:
+          name: mule-artifacts
 
-    - name: Setup Maven
-      uses: stCarolas/setup-maven@v5
-      with:
-        maven-version: 3.9.6
+      - name: "Set up Maven"
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: ${{ env.MAVEN_VERSION }}
 
-    - name: "Publish to Exchange"
-      env:
-        connectedAppId: ${{ secrets.connected_app_id }}
-        connectedAppSecret: ${{ secrets.connected_app_secret }}
-      run: mvn clean deploy --settings settings/settings.xml
+      - name: "Publish to Anypoint Exchange"
+        env:
+          connectedAppId: ${{ secrets.connected_app_id }}
+          connectedAppSecret: ${{ secrets.connected_app_secret }}
+        run: mvn deploy --settings settings/settings.xml -DskipTests
 
-  Deploy-To-CloudHub:
+  Deploy-To-CloudHub2:
     needs: Publish-To-Exchange
     runs-on: ubuntu-latest
     env:
       JAVA_VERSION: '17'
+      MAVEN_VERSION: '3.9.6'
       ENVIRONMENT: 'DEV'
     steps:
-    - name: "Checkout Repository ${{ github.repository }}"
-      uses: actions/checkout@v4
+      - name: "Checkout Repository"
+        uses: actions/checkout@v4
 
-    - name: "Cache Dependencies"
-      uses: actions/cache@v4
-      with:
-        path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-        restore-keys: |
-          ${{ runner.os }}-maven-
+      - name: "Restore Maven Cache"
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('**/pom.xml') }}
 
-    - name: "Download the JAR File"
-      uses: actions/download-artifact@v4
-      with:
-        name: "Artifacts"
+      - name: "Download JAR Artifact"
+        uses: actions/download-artifact@v4
+        with:
+          name: mule-artifacts
 
-    - name: Setup Maven
-      uses: stCarolas/setup-maven@v5
-      with:
-        maven-version: 3.9.6
+      - name: "Set up Maven"
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: ${{ env.MAVEN_VERSION }}
 
-    - name: "Deploy to DEV"
-      env:
-        connectedAppId: ${{ secrets.connected_app_id }}
-        connectedAppSecret: ${{ secrets.connected_app_secret }}
-        grantType: ${{ secrets.grant_type }}
-      run: mvn clean deploy -DskipTests -DmuleDeploy -DClientId="$connectedAppId" -DClientSecret="$connectedAppSecret" -DjavaVersion="${{ env.JAVA_VERSION }}" -DGrantType="$grantType" -Denvironment="DEV" -D"mule.env"="${{ secrets.dev_mule_env }}" -D"application.name"="ci-cd-demo-poc-geetika"
+      - name: "Deploy to CloudHub 2.0"
+        env:
+          connectedAppId: ${{ secrets.connected_app_id }}
+          connectedAppSecret: ${{ secrets.connected_app_secret }}
+          grantType: ${{ secrets.grant_type }}
+        run: |
+          echo "Deploying Mule App to CloudHub 2.0..."
+          mvn clean deploy -DskipTests -DmuleDeploy \
+              -DClientId="$connectedAppId" \
+              -DClientSecret="$connectedAppSecret" \
+              -DGrantType="$grantType" \
+              -DjavaVersion="${{ env.JAVA_VERSION }}" \
+              -Denvironment="${{ env.ENVIRONMENT }}" \
+              -D"mule.env"="${{ secrets.dev_mule_env }}" \
+              -D"application.name"="ci-cd-demo-poc-geetika"
+
+  Notify:
+    needs: Deploy-To-CloudHub2
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: "Send Deployment Summary"
+        run: |
+          echo "Mule Application successfully deployed to CloudHub 2.0 Environment: DEV"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Commit: ${{ github.event.head_commit.message }}"
+          echo "Workflow Run ID: ${{ github.run_id }}"
