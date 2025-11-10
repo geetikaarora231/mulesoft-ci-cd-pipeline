@@ -135,7 +135,7 @@ jobs:
               -DjavaVersion="${{ env.JAVA_VERSION }}" \
               -Denvironment="${{ env.ENVIRONMENT }}" \
               -D"mule.env"="${{ secrets.dev_mule_env }}" \
-              -D"application.name"="ci-cd-demo-poc-geetika" \
+              -D"application.name"="ci-cd-deploy-poc-geetika" \
               -Dtarget=Cloudhub-US-East-1 -Dreplicas=1 -DvCores="0.1"
 
   Notify:
