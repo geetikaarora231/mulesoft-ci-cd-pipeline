@@ -129,7 +129,7 @@ jobs:
           grantType: ${{ secrets.grant_type }}
         run: |
           echo "Deploying Mule App to CloudHub 2.0..."
-          mvn clean deploy --settings settings/settings.xml -DskipTests -DmuleDeploy -DjavaVersion="${{ env.JAVA_VERSION }}" -Denvironment="${{ env.ENVIRONMENT }}" -D"mule.env"="${{ secrets.dev_mule_env }}"  -D"application.name"="ci-cd-deploy-poc-geetika" -Dtarget=Cloudhub-US-East-1 -Dreplicas=1 -DvCores="0.1"
+          mvn clean deploy --settings settings/settings.xml -DskipTests -DmuleDeploy -DjavaVersion="${{ env.JAVA_VERSION }}" -Denv="${{ env.ENVIRONMENT }}" -D"mule.env"="${{ secrets.dev_mule_env }}"  -D"application.name"="ci-cd-deploy-poc-geetika" -Dtarget=Cloudhub-US-East-1 -Dreplicas=1 -DvCores="0.1"
 
   Notify:
     needs: Deploy-To-CloudHub2
