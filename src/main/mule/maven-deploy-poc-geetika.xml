@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="16d75182-379b-40c9-b4d3-5e1756063649" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<flow name="maven-deploy-poc-geetika-flow" doc:id="76c2d035-760f-4aa2-967b-a103ef6eb3a5" >
+		<http:listener doc:name="Listener" doc:id="85e28a5b-0274-4760-bbf3-065127b0e5dd" config-ref="HTTP_Listener_config" path="maven-poc"/>
+		<logger level="INFO" doc:name="START" doc:id="a38cd2f4-1f86-405b-9fad-ff5712154057" message="Flow started"/>
+		<ee:transform doc:name="Prepare Response" doc:id="5e5c2890-2832-4682-8487-a362b774e2aa" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message":"This POC belongs to Geetika"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="END" doc:id="7865ce9f-2f82-4af4-ab53-e533f3767f36" message="Flow Ended"/>
+	</flow>
+</mule>
